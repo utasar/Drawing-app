@@ -302,11 +302,19 @@ canvas.addEventListener("touchmove", (e) => {
 // ===========================
 // Tool Selection
 // ===========================
+const usedTools = new Set();
+
 document.querySelectorAll('.tool-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         currentTool = btn.dataset.tool;
+        
+        // Track tool usage for achievement
+        usedTools.add(currentTool);
+        if (usedTools.size === 5) {
+            unlockAchievement('color_expert');
+        }
     });
 });
 
@@ -432,12 +440,17 @@ document.getElementById("saveLocal").addEventListener("click", () => {
 
 function loadGallery() {
     const galleryContent = document.getElementById('galleryContent');
+    const galleryPanel = document.getElementById('galleryPanel');
     const drawings = JSON.parse(localStorage.getItem('drawings') || '[]');
     
     if (drawings.length === 0) {
         galleryContent.innerHTML = '<p>No saved drawings yet. Create and save your first masterpiece!</p>';
+        galleryPanel.style.display = 'none';
         return;
     }
+    
+    // Show gallery panel when there are drawings
+    galleryPanel.style.display = 'block';
     
     galleryContent.innerHTML = '';
     drawings.forEach((drawing, index) => {
@@ -606,7 +619,7 @@ document.getElementById("inspirationBtn").addEventListener("click", () => {
         </div>
     `).join('');
     
-    updateAchievements();
+    unlockAchievement('inspiration');
 });
 
 // ===========================
