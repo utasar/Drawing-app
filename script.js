@@ -1,4 +1,10 @@
 // ===========================
+// Layer Management
+// ===========================
+let layers = [{ canvas: document.createElement('canvas'), visible: true, name: 'Layer 1' }];
+let currentLayerIndex = 0;
+
+// ===========================
 // Canvas and Context Setup
 // ===========================
 const canvas = document.getElementById("canvas");
@@ -10,11 +16,31 @@ function resizeCanvas() {
     const maxWidth = canvasArea.clientWidth - 100;
     const maxHeight = canvasArea.clientHeight - 100;
     const size = Math.min(maxWidth, maxHeight, 800);
+    
+    // Save current canvas state before resizing
+    const imageData = canvas.toDataURL();
+    
     canvas.width = size;
     canvas.height = size;
+    
+    // Update layer canvases to match new size
+    layers.forEach(layer => {
+        layer.canvas.width = size;
+        layer.canvas.height = size;
+    });
+    
+    // Restore the image if we had one
+    if (imageData && imageData !== 'data:,') {
+        const img = new Image();
+        img.onload = () => {
+            ctx.drawImage(img, 0, 0);
+        };
+        img.src = imageData;
+    }
 }
 resizeCanvas();
-window.addEventListener('resize', resizeCanvas);
+// Don't auto-resize on window resize to prevent data loss
+// window.addEventListener('resize', resizeCanvas);
 
 // ===========================
 // Drawing State
@@ -25,12 +51,6 @@ let currentTool = "brush";
 let isPressed = false;
 let x = undefined;
 let y = undefined;
-
-// ===========================
-// Layer Management
-// ===========================
-let layers = [{ canvas: document.createElement('canvas'), visible: true, name: 'Layer 1' }];
-let currentLayerIndex = 0;
 
 function initializeLayers() {
     layers.forEach(layer => {
@@ -394,11 +414,13 @@ document.getElementById("exportJPG").addEventListener("click", () => {
 // ===========================
 // Local Storage Gallery
 // ===========================
+let drawingIdCounter = Date.now();
+
 document.getElementById("saveLocal").addEventListener("click", () => {
     const drawings = JSON.parse(localStorage.getItem('drawings') || '[]');
     const dataURL = canvas.toDataURL();
     drawings.push({
-        id: Date.now(),
+        id: drawingIdCounter++,
         data: dataURL,
         timestamp: new Date().toISOString()
     });
@@ -423,14 +445,22 @@ function loadGallery() {
         item.className = 'gallery-item';
         item.innerHTML = `
             <img src="${drawing.data}" alt="Drawing ${index + 1}">
-            <button class="gallery-item-delete material-icons">delete</button>
+            <button class="gallery-item-delete material-icons" data-drawing-id="${drawing.id}">delete</button>
         `;
         
         item.querySelector('img').addEventListener('click', () => {
             const img = new Image();
             img.onload = () => {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(img, 0, 0);
+                // Clear all layers
+                layers.forEach(layer => {
+                    const layerCtx = layer.canvas.getContext('2d');
+                    layerCtx.clearRect(0, 0, layer.canvas.width, layer.canvas.height);
+                });
+                
+                // Load image to current layer
+                const layerCtx = getCurrentLayerContext();
+                layerCtx.drawImage(img, 0, 0);
+                renderLayers();
                 saveState();
             };
             img.src = drawing.data;
@@ -439,9 +469,10 @@ function loadGallery() {
         item.querySelector('.gallery-item-delete').addEventListener('click', (e) => {
             e.stopPropagation();
             if (confirm('Delete this drawing?')) {
+                const drawingId = parseInt(e.target.dataset.drawingId);
                 const drawings = JSON.parse(localStorage.getItem('drawings') || '[]');
-                drawings.splice(index, 1);
-                localStorage.setItem('drawings', JSON.stringify(drawings));
+                const filteredDrawings = drawings.filter(d => d.id !== drawingId);
+                localStorage.setItem('drawings', JSON.stringify(filteredDrawings));
                 loadGallery();
             }
         });
@@ -693,8 +724,49 @@ function unlockAchievement(id) {
 }
 
 function showAchievementNotification(achievement) {
-    // Simple notification (could be enhanced with a toast)
-    console.log(`Achievement unlocked: ${achievement.title}`);
+    // Create toast notification
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+        color: #333;
+        padding: 1rem 1.5rem;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        z-index: 10000;
+        font-family: Poppins, sans-serif;
+        font-weight: 600;
+        animation: slideIn 0.3s ease-out;
+    `;
+    toast.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="font-size: 2rem;">${achievement.icon}</span>
+            <div>
+                <div style="font-size: 0.9rem;">🎉 Achievement Unlocked!</div>
+                <div style="font-size: 1.1rem;">${achievement.title}</div>
+            </div>
+        </div>
+    `;
+    
+    // Add animation
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes slideIn {
+            from { transform: translateX(400px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+    `;
+    document.head.appendChild(style);
+    
+    document.body.appendChild(toast);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        toast.style.animation = 'slideIn 0.3s ease-out reverse';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
 }
 
 document.getElementById("achievementsBtn").addEventListener("click", () => {
