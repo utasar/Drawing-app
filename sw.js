@@ -32,7 +32,15 @@ self.addEventListener('fetch', (event) => {
                 if (response) {
                     return response;
                 }
-                return fetch(event.request);
+                // Try network request
+                return fetch(event.request).catch((error) => {
+                    console.log('Fetch failed; returning offline page instead.', error);
+                    // Could return a custom offline page here if desired
+                    return new Response('Offline - cached content not available', {
+                        status: 503,
+                        statusText: 'Service Unavailable'
+                    });
+                });
             })
     );
 });

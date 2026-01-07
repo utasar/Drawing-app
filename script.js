@@ -17,26 +17,31 @@ function resizeCanvas() {
     const maxHeight = canvasArea.clientHeight - 100;
     const size = Math.min(maxWidth, maxHeight, 800);
     
-    // Save current canvas state before resizing
-    const imageData = canvas.toDataURL();
+    // Save current layers state before resizing
+    const layerStates = layers.map(layer => layer.canvas.toDataURL());
     
     canvas.width = size;
     canvas.height = size;
     
-    // Update layer canvases to match new size
-    layers.forEach(layer => {
+    // Update layer canvases to match new size and restore content
+    layers.forEach((layer, index) => {
         layer.canvas.width = size;
         layer.canvas.height = size;
+        
+        // Restore layer content if we had one
+        if (layerStates[index] && layerStates[index] !== 'data:,') {
+            const img = new Image();
+            const layerCtx = layer.canvas.getContext('2d');
+            img.onload = () => {
+                layerCtx.drawImage(img, 0, 0);
+                if (index === layers.length - 1) {
+                    // After all layers are restored, render to main canvas
+                    renderLayers();
+                }
+            };
+            img.src = layerStates[index];
+        }
     });
-    
-    // Restore the image if we had one
-    if (imageData && imageData !== 'data:,') {
-        const img = new Image();
-        img.onload = () => {
-            ctx.drawImage(img, 0, 0);
-        };
-        img.src = imageData;
-    }
 }
 resizeCanvas();
 // Don't auto-resize on window resize to prevent data loss
@@ -422,13 +427,21 @@ document.getElementById("exportJPG").addEventListener("click", () => {
 // ===========================
 // Local Storage Gallery
 // ===========================
-let drawingIdCounter = Date.now();
+function getNextDrawingId() {
+    const drawings = JSON.parse(localStorage.getItem('drawings') || '[]');
+    if (drawings.length === 0) {
+        return 1;
+    }
+    // Find the maximum ID and increment
+    const maxId = Math.max(...drawings.map(d => d.id || 0));
+    return maxId + 1;
+}
 
 document.getElementById("saveLocal").addEventListener("click", () => {
     const drawings = JSON.parse(localStorage.getItem('drawings') || '[]');
     const dataURL = canvas.toDataURL();
     drawings.push({
-        id: drawingIdCounter++,
+        id: getNextDrawingId(),
         data: dataURL,
         timestamp: new Date().toISOString()
     });
