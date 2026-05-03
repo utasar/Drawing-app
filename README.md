@@ -1,1 +1,1 @@
-new thinks to add
+new things to add
